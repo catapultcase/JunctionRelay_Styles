@@ -76,6 +76,17 @@ export {
   THUMBNAIL_HEIGHTS,
 } from './styles/pluginStyles';
 
+// Configure page styles
+export {
+  CONFIGURE_PAGE_HEADER_SX,
+  CONFIGURE_CHIPS_ROW_SX,
+  CONFIGURE_TWO_COLUMN_SX,
+  CONFIGURE_COLUMN_SX,
+  getFieldGridSx,
+  CONFIGURE_FIELD_FULL_WIDTH_SX,
+  CONFIGURE_PREVIEW_CODE_SX,
+} from './styles/configurePageStyles';
+
 // Types
 export type { ColumnDefinition } from './types/ColumnDefinition';
 

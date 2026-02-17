@@ -4,8 +4,7 @@
   "description": "Shared UI styles, types, hooks, and components for JunctionRelay apps",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "private": true,
-  "license": "PROPRIETARY",
+  "license": "GPL-3.0-or-later",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

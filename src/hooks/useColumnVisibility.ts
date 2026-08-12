@@ -36,6 +36,21 @@ export interface UseColumnVisibilityReturn<T extends string> {
   closePopover: () => void;
 }
 
+// Raw order must never strand a movable column outside the pinned rails. New fields
+// used to be appended at the very END of the stored order — i.e. AFTER an end-pinned
+// column like Actions — where moveColumn refused the swap ("don't cross a pinned
+// column") and the up/down arrows went silently dead. Normalising to
+// start-pinned / middle / end-pinned keeps the raw order aligned with the displayed
+// (effective) order, so a neighbour in the picker is the neighbour moveColumn sees.
+function normalizeOrder<T extends string>(order: T[], cols: ColumnDefinition<T>[]): T[] {
+  const pin = new Map(cols.map((c) => [c.field, c.pinned]));
+  return [
+    ...order.filter((f) => pin.get(f) === 'start'),
+    ...order.filter((f) => !pin.get(f)),
+    ...order.filter((f) => pin.get(f) === 'end'),
+  ];
+}
+
 /**
  * Hook for managing table column visibility, ordering, and persistence.
  *
@@ -60,17 +75,17 @@ export function useColumnVisibility<T extends string>(
           // Old format: plain array of visible column fields
           const valid = parsed.filter((f: T) => allFields.includes(f));
           const missing = allFields.filter((f) => !valid.includes(f));
-          return [...valid, ...missing];
+          return normalizeOrder([...valid, ...missing], allColumns);
         }
         if (parsed && parsed.order) {
           // New format: { order, hidden }
           const valid = (parsed.order as T[]).filter((f) => allFields.includes(f));
           const missing = allFields.filter((f) => !valid.includes(f));
-          return [...valid, ...missing];
+          return normalizeOrder([...valid, ...missing], allColumns);
         }
       }
     } catch { /* fall through to default */ }
-    return allFields;
+    return normalizeOrder(allFields, allColumns);
   });
 
   const [hiddenSet, setHiddenSet] = useState<Set<T>>(() => {
@@ -98,10 +113,13 @@ export function useColumnVisibility<T extends string>(
     setColumnOrder((prev) => {
       const prevSet = new Set(prev);
       const newFields = allFields.filter((f) => !prevSet.has(f));
-      if (newFields.length === 0 && prev.length === allFields.length) return prev;
       const validFields = new Set(allFields);
       const filtered = prev.filter((f) => validFields.has(f));
-      return [...filtered, ...newFields];
+      // Normalize even when nothing was added/removed: this also repairs orders
+      // persisted by the pre-normalization version of this hook.
+      const next = normalizeOrder([...filtered, ...newFields], allColumns);
+      if (next.length === prev.length && next.every((f, i) => f === prev[i])) return prev;
+      return next;
     });
     // Also clean up hidden set — remove fields that no longer exist
     setHiddenSet((prev) => {
@@ -110,7 +128,7 @@ export function useColumnVisibility<T extends string>(
       if (next.size === prev.size) return prev;
       return next;
     });
-  }, [allFields]);
+  }, [allFields, allColumns]);
 
   // Persist to localStorage (new format)
   useEffect(() => {
@@ -164,7 +182,7 @@ export function useColumnVisibility<T extends string>(
   }, [allColumns]);
 
   const resetToDefault = useCallback(() => {
-    setColumnOrder(allFields);
+    setColumnOrder(normalizeOrder(allFields, allColumns));
     setHiddenSet(new Set<T>(allColumns.filter((c) => c.defaultHidden).map((c) => c.field)));
   }, [allFields, allColumns]);
 

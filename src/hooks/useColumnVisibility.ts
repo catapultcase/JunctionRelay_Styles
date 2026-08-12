@@ -51,6 +51,25 @@ function normalizeOrder<T extends string>(order: T[], cols: ColumnDefinition<T>[
   ];
 }
 
+// Merge fields missing from a stored order at their DEFINITION position — right after
+// the nearest preceding definition field the user already has — rather than appending
+// at the tail. A new price column defined next to MSRP should appear next to MSRP,
+// not after Files, while the user's own ordering of everything else is preserved.
+function mergeNewFields<T extends string>(stored: T[], defFields: T[]): T[] {
+  const result = [...stored];
+  for (const f of defFields) {
+    if (result.includes(f)) continue;
+    const defIdx = defFields.indexOf(f);
+    let insertAt = 0;
+    for (let i = defIdx - 1; i >= 0; i--) {
+      const p = result.indexOf(defFields[i]);
+      if (p >= 0) { insertAt = p + 1; break; }
+    }
+    result.splice(insertAt, 0, f);
+  }
+  return result;
+}
+
 /**
  * Hook for managing table column visibility, ordering, and persistence.
  *
@@ -74,14 +93,12 @@ export function useColumnVisibility<T extends string>(
         if (Array.isArray(parsed)) {
           // Old format: plain array of visible column fields
           const valid = parsed.filter((f: T) => allFields.includes(f));
-          const missing = allFields.filter((f) => !valid.includes(f));
-          return normalizeOrder([...valid, ...missing], allColumns);
+          return normalizeOrder(mergeNewFields(valid, allFields), allColumns);
         }
         if (parsed && parsed.order) {
           // New format: { order, hidden }
           const valid = (parsed.order as T[]).filter((f) => allFields.includes(f));
-          const missing = allFields.filter((f) => !valid.includes(f));
-          return normalizeOrder([...valid, ...missing], allColumns);
+          return normalizeOrder(mergeNewFields(valid, allFields), allColumns);
         }
       }
     } catch { /* fall through to default */ }
@@ -111,13 +128,11 @@ export function useColumnVisibility<T extends string>(
   // Append any new fields and remove any stale ones so late-arriving columns appear.
   useEffect(() => {
     setColumnOrder((prev) => {
-      const prevSet = new Set(prev);
-      const newFields = allFields.filter((f) => !prevSet.has(f));
       const validFields = new Set(allFields);
       const filtered = prev.filter((f) => validFields.has(f));
       // Normalize even when nothing was added/removed: this also repairs orders
       // persisted by the pre-normalization version of this hook.
-      const next = normalizeOrder([...filtered, ...newFields], allColumns);
+      const next = normalizeOrder(mergeNewFields(filtered, allFields), allColumns);
       if (next.length === prev.length && next.every((f, i) => f === prev[i])) return prev;
       return next;
     });
